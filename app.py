@@ -31,7 +31,7 @@ stocks = [
     "SASA.IS",
     "PGSUS.IS",
     "KRONT.IS",
-    "SASA.IS",
+    "MOBTL.IS",
     "TEKTU.IS",
     "FRIGO.IS",
     "RNPOL.IS"
@@ -392,4 +392,4 @@ else:
     st.warning(
         "Bu hisse için sinyal verisi bulunamadı."
     )
-```
+
