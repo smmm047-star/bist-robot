@@ -63,7 +63,9 @@ value=50,
 step=5
 )
 
-filtered = df[df["AI %"] >= min_ai].copy()
+filtered = df[
+df["AI %"] >= min_ai
+].copy()
 
 st.subheader("📋 Sinyal Tablosu")
 
@@ -80,7 +82,9 @@ hide_index=True
 
 st.subheader("🔥 Güçlü AL Adayları (80+)")
 
-strong_buy = df[df["AI %"] >= 80].copy()
+strong_buy = df[
+df["AI %"] >= 80
+].copy()
 
 if strong_buy.empty:
 st.info(
@@ -96,7 +100,8 @@ hide_index=True
 st.subheader("🔎 Hisse Analizi")
 
 available_stocks = [
-stock for stock in stocks
+stock
+for stock in stocks
 if stock in df["Hisse"].values
 ]
 
@@ -334,24 +339,28 @@ st.subheader("🎯 Teknik Seviyeler")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
+
     st.metric(
         "Destek",
         f"{row['Destek']:.2f}"
     )
 
 with col2:
+
     st.metric(
         "Direnç",
         f"{row['Direnç']:.2f}"
     )
 
 with col3:
+
     st.metric(
         "Stop",
         f"{row['Stop']:.2f}"
     )
 
 with col4:
+
     st.metric(
         "Hedef 1",
         f"{row['Hedef 1']:.2f}"
@@ -412,4 +421,7 @@ with indicator_col3:
         f"**AI Skoru:** {row['AI %']:.0f}%"
     )
 
-
+st.caption(
+"⚠️ Bu sistem teknik göstergelere dayalı "
+"otomatik analiz üretir. Yatırım tavsiyesi değildir."
+)
