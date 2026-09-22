@@ -420,9 +420,4 @@ with indicator_col3:
     st.write(
         f"**AI Skoru:** {row['AI %']:.0f}%"
     )
-```
 
-st.caption(
-"⚠️ Bu sistem teknik göstergelere dayalı "
-"otomatik analiz üretir. Yatırım tavsiyesi değildir."
-)
