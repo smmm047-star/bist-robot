@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -5,97 +6,391 @@ import plotly.graph_objects as go
 
 from engine import scan_stocks
 
-st.set_page_config(page_title="PRO AI TRADING DASHBOARD", layout="wide")
+
+# =========================================================
+# SAYFA AYARLARI
+# =========================================================
+
+st.set_page_config(
+    page_title="PRO AI TRADING DASHBOARD",
+    layout="wide"
+)
+
+
+# =========================================================
+# BIST HİSSELERİ
+# =========================================================
 
 stocks = [
-    "THYAO.IS","ASELS.IS","BIMAS.IS","FROTO.IS",
-    "SISE.IS","EGEEN.IS","ASTOR.IS","SASA.IS",
-    "PGSUSIS","GWIND.IS","ATATR.IS","TEKTU.IS","FRIGO.IS","RNPOL.IS"
+    "THYAO.IS",
+    "CANTE.IS",
+    "BIMAS.IS",
+    "FROTO.IS",
+    "SISE.IS",
+    "ARSAN.IS",
+    "ASTOR.IS",
+    "SASA.IS",
+    "PGSUS.IS",
+    "KRONT.IS",
+    "SASA.IS",
+    "TEKTU.IS",
+    "FRIGO.IS",
+    "RNPOL.IS"
 ]
+
+
+# =========================================================
+# BAŞLIK
+# =========================================================
 
 st.title("📊 PRO AI TRADING DASHBOARD (BIST)")
 st.write("Canlı teknik analiz + AI sinyal sistemi")
 
-# =========================
-# ENGINE DATA
-# =========================
-results = scan_stocks(stocks)
 
-# 🔥 SAFE DF BUILD
+# =========================================================
+# ENGINE
+# =========================================================
+
+with st.spinner("Hisseler taranıyor..."):
+    results = scan_stocks(stocks)
+
+
 if results is None or len(results) == 0:
-    st.error("Engine veri üretmiyor!")
+
+    st.error(
+        "Engine veri üretmiyor. "
+        "Yahoo Finance verileri alınamadı veya hisseler taranamadı."
+    )
+
     st.stop()
+
+
+# =========================================================
+# DATAFRAME
+# =========================================================
 
 df = pd.DataFrame(results)
 
-# =========================
-# AUTO COLUMN FIX
-# =========================
-if df.shape[1] == 4:
-    df.columns = ["Hisse", "Fiyat", "Skor", "Sinyal"]
-    df["AI%"] = df["Skor"]
-elif df.shape[1] == 5:
-    df.columns = ["Hisse", "Fiyat", "Skor", "AI%", "Sinyal"]
 
-# =========================
-# FILTER
-# =========================
-min_ai = st.slider("Minimum AI %", 0, 100, 50)
+if df.empty:
 
-filtered = df[df.iloc[:, -2] >= min_ai]
+    st.error("Sinyal verisi oluşturulamadı.")
+
+    st.stop()
+
+
+# =========================================================
+# AI % SAYISAL OLARAK GARANTİ ET
+# =========================================================
+
+if "AI %" in df.columns:
+
+    df["AI %"] = pd.to_numeric(
+        df["AI %"],
+        errors="coerce"
+    ).fillna(0)
+
+
+# =========================================================
+# FİLTRE
+# =========================================================
+
+min_ai = st.slider(
+    "Minimum AI %",
+    min_value=0,
+    max_value=100,
+    value=50,
+    step=5
+)
+
+
+filtered = df[
+    df["AI %"] >= min_ai
+].copy()
+
+
+# =========================================================
+# SİNYAL TABLOSU
+# =========================================================
 
 st.subheader("📋 Sinyal Tablosu")
-st.dataframe(filtered, use_container_width=True)
 
-# =========================
-# STOCK SELECT
-# =========================
-selected = st.selectbox("Hisse seç", stocks)
+if filtered.empty:
 
-data = yf.download(selected, period="6mo", interval="1d")
-data = data.dropna()
+    st.warning(
+        f"AI % {min_ai} ve üzeri sinyal bulunamadı."
+    )
 
-# =========================
-# INDICATORS
-# =========================
-ema20 = data["Close"].ewm(span=20).mean()
-ema50 = data["Close"].ewm(span=50).mean()
+else:
+
+    st.dataframe(
+        filtered,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# =========================================================
+# GÜÇLÜ AL ADAYLARI
+# =========================================================
+
+strong_buy = df[
+    df["AI %"] >= 80
+].copy()
+
+
+st.subheader("🔥 Güçlü AL Adayları (80+)")
+
+if strong_buy.empty:
+
+    st.info("Şu anda AI % 80 üzeri hisse bulunmuyor.")
+
+else:
+
+    st.dataframe(
+        strong_buy,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# =========================================================
+# HİSSE SEÇ
+# =========================================================
+
+selected = st.selectbox(
+    "Hisse seç",
+    stocks
+)
+
+
+# =========================================================
+# GRAFİK VERİSİ
+# =========================================================
+
+with st.spinner(f"{selected} grafik verisi yükleniyor..."):
+
+    data = yf.download(
+        selected,
+        period="6mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=False,
+        threads=False
+    )
+
+
+if data is None or data.empty:
+
+    st.warning(
+        f"{selected} için grafik verisi alınamadı."
+    )
+
+    st.stop()
+
+
+# =========================================================
+# MULTIINDEX TEMİZLE
+# =========================================================
+
+if isinstance(data.columns, pd.MultiIndex):
+
+    try:
+
+        data.columns = data.columns.get_level_values(0)
+
+    except Exception:
+
+        data.columns = [
+            col[0] if isinstance(col, tuple) else col
+            for col in data.columns
+        ]
+
+
+data = data.loc[
+    :,
+    ~data.columns.duplicated()
+]
+
+
+required_columns = [
+    "Open",
+    "High",
+    "Low",
+    "Close"
+]
+
+
+for column in required_columns:
+
+    if column not in data.columns:
+
+        st.warning(
+            f"{selected} için {column} verisi bulunamadı."
+        )
+
+        st.stop()
+
+
+data = data.dropna(
+    subset=required_columns
+)
+
+
+if data.empty:
+
+    st.warning(
+        f"{selected} için kullanılabilir veri yok."
+    )
+
+    st.stop()
+
+
+# =========================================================
+# CLOSE SERIES
+# =========================================================
+
+close = pd.to_numeric(
+    data["Close"],
+    errors="coerce"
+).dropna()
+
+
+# =========================================================
+# İNDİKATÖRLER
+# =========================================================
+
+ema20 = close.ewm(
+    span=20,
+    adjust=False
+).mean()
+
+
+ema50 = close.ewm(
+    span=50,
+    adjust=False
+).mean()
+
 
 window = 20
-ma = data["Close"].rolling(window).mean()
-std = data["Close"].rolling(window).std()
 
-bb_upper = ma + (2 * std)
-bb_lower = ma - (2 * std)
+ma = close.rolling(
+    window
+).mean()
 
-# =========================
-# CHART
-# =========================
+
+std = close.rolling(
+    window
+).std()
+
+
+bb_upper = ma + (
+    2 * std
+)
+
+
+bb_lower = ma - (
+    2 * std
+)
+
+
+# =========================================================
+# GRAFİK
+# =========================================================
+
+st.subheader(
+    f"📈 {selected} Teknik Grafik"
+)
+
+
 fig = go.Figure()
 
-fig.add_trace(go.Candlestick(
-    x=data.index,
-    open=data["Open"],
-    high=data["High"],
-    low=data["Low"],
-    close=data["Close"]
-))
 
-fig.add_trace(go.Scatter(x=data.index, y=ema20, name="EMA20"))
-fig.add_trace(go.Scatter(x=data.index, y=ema50, name="EMA50"))
-fig.add_trace(go.Scatter(x=data.index, y=bb_upper, name="BB Upper"))
-fig.add_trace(go.Scatter(x=data.index, y=bb_lower, name="BB Lower"))
+fig.add_trace(
+    go.Candlestick(
+        x=data.index,
+        open=data["Open"],
+        high=data["High"],
+        low=data["Low"],
+        close=data["Close"],
+        name=selected
+    )
+)
 
-st.plotly_chart(fig, use_container_width=True)
 
-# =========================
-# AI DETAIL (SAFE FIX)
-# =========================
-st.subheader("🤖 AI Sinyal Detayı")
+fig.add_trace(
+    go.Scatter(
+        x=data.index,
+        y=ema20,
+        name="EMA20"
+    )
+)
 
-match = df[df.iloc[:, 0] == selected]
+
+fig.add_trace(
+    go.Scatter(
+        x=data.index,
+        y=ema50,
+        name="EMA50"
+    )
+)
+
+
+fig.add_trace(
+    go.Scatter(
+        x=data.index,
+        y=bb_upper,
+        name="BB Upper"
+    )
+)
+
+
+fig.add_trace(
+    go.Scatter(
+        x=data.index,
+        y=bb_lower,
+        name="BB Lower"
+    )
+)
+
+
+fig.update_layout(
+    height=650,
+    xaxis_rangeslider_visible=False
+)
+
+
+st.plotly_chart(
+    fig,
+    use_container_width=True
+)
+
+
+# =========================================================
+# AI DETAY
+# =========================================================
+
+st.subheader(
+    "🤖 AI Sinyal Detayı"
+)
+
+
+match = df[
+    df["Hisse"] == selected
+]
+
 
 if not match.empty:
-    st.dataframe(match, use_container_width=True)
+
+    st.dataframe(
+        match,
+        use_container_width=True,
+        hide_index=True
+    )
+
 else:
-    st.warning("Bu hisse için sinyal yok (engine boş veri üretiyor olabilir)")
+
+    st.warning(
+        "Bu hisse için sinyal verisi bulunamadı."
+    )
+```
