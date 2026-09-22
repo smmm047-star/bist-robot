@@ -96,7 +96,8 @@ hide_index=True
 st.subheader("🔎 Hisse Analizi")
 
 available_stocks = [
-stock for stock in stocks
+stock
+for stock in stocks
 if stock in df["Hisse"].values
 ]
 
@@ -163,20 +164,13 @@ data = yf.download(
 ```
 
 if data is None or data.empty:
-
-```
 st.warning(
-    f"{selected} için grafik verisi alınamadı."
+f"{selected} için grafik verisi alınamadı."
 )
-
 st.stop()
-```
 
 if isinstance(data.columns, pd.MultiIndex):
-
-```
 data.columns = data.columns.get_level_values(0)
-```
 
 data = data.loc[
 :,
@@ -194,11 +188,9 @@ for column in required_columns:
 
 ```
 if column not in data.columns:
-
     st.warning(
         f"{selected} için {column} verisi bulunamadı."
     )
-
     st.stop()
 ```
 
@@ -216,14 +208,10 @@ subset=required_columns
 )
 
 if data.empty:
-
-```
 st.warning(
-    f"{selected} için kullanılabilir veri yok."
+f"{selected} için kullanılabilir veri yok."
 )
-
 st.stop()
-```
 
 close = data["Close"]
 
