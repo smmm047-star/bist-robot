@@ -1,124 +1,533 @@
 import yfinance as yf
 import pandas as pd
-import ta
+import numpy as np
 
-# =========================
-# MAIN SCANNER (STABLE)
-# =========================
+
+# =========================================================
+# YARDIMCI FONKSİYONLAR
+# =========================================================
+
+def clean_series(series):
+    """Series'i güvenli şekilde tek boyutlu numeric hale getirir."""
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:, 0]
+
+    return pd.to_numeric(series, errors="coerce")
+
+
+def calculate_rsi(close, period=14):
+    delta = close.diff()
+
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi
+
+
+def calculate_macd(close):
+    ema12 = close.ewm(
+        span=12,
+        adjust=False
+    ).mean()
+
+    ema26 = close.ewm(
+        span=26,
+        adjust=False
+    ).mean()
+
+    macd = ema12 - ema26
+
+    signal = macd.ewm(
+        span=9,
+        adjust=False
+    ).mean()
+
+    return macd, signal
+
+
+# =========================================================
+# ANA TARAMA MOTORU
+# =========================================================
+
 def scan_stocks(stocks):
 
     results = []
 
-    for s in stocks:
+    for symbol in stocks:
+
         try:
-            df = yf.download(s, period="1y", interval="1d", progress=False)
 
-            if df is None or df.empty:
+            print(f"Scanning {symbol}...")
+
+            data = yf.download(
+                symbol,
+                period="1y",
+                interval="1d",
+                progress=False,
+                auto_adjust=False,
+                threads=False
+            )
+
+            if data is None or data.empty:
+
+                print(f"No data: {symbol}")
+
                 continue
 
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
 
-            close = df["Close"].dropna()
-            volume = df["Volume"].dropna()
+            # =================================================
+            # MULTIINDEX TEMİZLE
+            # =================================================
 
-            # =========================
-            # MIN DATA CHECK (FIXED)
-            # =========================
-            if len(close) < 50:
+            if isinstance(data.columns, pd.MultiIndex):
+
+                data.columns = data.columns.get_level_values(0)
+
+
+            data = data.loc[
+                :,
+                ~data.columns.duplicated()
+            ]
+
+
+            required = [
+                "Close",
+                "High",
+                "Low",
+                "Volume"
+            ]
+
+            if not all(
+                col in data.columns
+                for col in required
+            ):
+
+                print(
+                    f"Missing columns: {symbol}"
+                )
+
                 continue
 
-            # =========================
-            # INDICATORS
-            # =========================
-            ema20 = close.ewm(span=20).mean()
-            ema50 = close.ewm(span=50).mean()
-            ema200 = close.ewm(span=50).mean()  # daha stabil
 
-            rsi = ta.momentum.RSIIndicator(close=close).rsi()
+            close = clean_series(
+                data["Close"]
+            )
 
-            macd = ta.trend.MACD(close=close)
-            macd_line = macd.macd()
-            signal_line = macd.macd_signal()
+            high = clean_series(
+                data["High"]
+            )
 
-            # =========================
-            # VOLUME SCORE
-            # =========================
-            vol_mean = volume.mean()
-            vol_std = volume.std()
+            low = clean_series(
+                data["Low"]
+            )
 
-            vol_z = 0
-            if vol_std and vol_std > 0:
-                vol_z = (volume.iloc[-1] - vol_mean) / vol_std
+            volume = clean_series(
+                data["Volume"]
+            )
 
-            # =========================
-            # SCORE SYSTEM
-            # =========================
+
+            df = pd.DataFrame({
+                "Close": close,
+                "High": high,
+                "Low": low,
+                "Volume": volume
+            }).dropna()
+
+
+            if len(df) < 60:
+
+                print(
+                    f"Not enough data: {symbol}"
+                )
+
+                continue
+
+
+            # =================================================
+            # GÜNCEL FİYAT
+            # =================================================
+
+            price = float(
+                df["Close"].iloc[-1]
+            )
+
+
+            # =================================================
+            # EMA
+            # =================================================
+
+            ema20 = df["Close"].ewm(
+                span=20,
+                adjust=False
+            ).mean()
+
+            ema50 = df["Close"].ewm(
+                span=50,
+                adjust=False
+            ).mean()
+
+            ema200 = df["Close"].ewm(
+                span=200,
+                adjust=False
+            ).mean()
+
+
+            e20 = float(
+                ema20.iloc[-1]
+            )
+
+            e50 = float(
+                ema50.iloc[-1]
+            )
+
+            e200 = float(
+                ema200.iloc[-1]
+            )
+
+
+            # =================================================
+            # RSI
+            # =================================================
+
+            rsi_series = calculate_rsi(
+                df["Close"]
+            )
+
+            rsi = float(
+                rsi_series.iloc[-1]
+            )
+
+
+            # =================================================
+            # MACD
+            # =================================================
+
+            macd_series, signal_series = (
+                calculate_macd(
+                    df["Close"]
+                )
+            )
+
+            macd = float(
+                macd_series.iloc[-1]
+            )
+
+            macd_signal = float(
+                signal_series.iloc[-1]
+            )
+
+
+            # =================================================
+            # BOLLINGER
+            # =================================================
+
+            ma20 = df["Close"].rolling(
+                20
+            ).mean()
+
+            std20 = df["Close"].rolling(
+                20
+            ).std()
+
+            bb_upper = (
+                ma20 + 2 * std20
+            )
+
+            bb_lower = (
+                ma20 - 2 * std20
+            )
+
+            upper = float(
+                bb_upper.iloc[-1]
+            )
+
+            lower = float(
+                bb_lower.iloc[-1]
+            )
+
+
+            # =================================================
+            # HACİM
+            # =================================================
+
+            avg_volume = (
+                df["Volume"]
+                .rolling(20)
+                .mean()
+                .iloc[-1]
+            )
+
+            current_volume = float(
+                df["Volume"].iloc[-1]
+            )
+
+            volume_ratio = (
+                current_volume /
+                avg_volume
+                if avg_volume > 0
+                else 0
+            )
+
+
+            # =================================================
+            # MOMENTUM
+            # =================================================
+
+            momentum = (
+                (
+                    price /
+                    float(df["Close"].iloc[-6])
+                ) - 1
+            ) * 100
+
+
+            # =================================================
+            # DESTEK / DİRENÇ
+            # =================================================
+
+            support = float(
+                df["Low"]
+                .tail(20)
+                .min()
+            )
+
+            resistance = float(
+                df["High"]
+                .tail(20)
+                .max()
+            )
+
+
+            # =================================================
+            # AI SKOR
+            # =================================================
+
             score = 0
 
-            # Trend
-            if ema20.iloc[-1] > ema50.iloc[-1]:
-                score += 25
 
-            # Momentum
-            if close.iloc[-1] > close.iloc[-5]:
-                score += 10
-
-            # RSI zone
-            if 40 < rsi.iloc[-1] < 70:
+            # EMA TREND
+            if e20 > e50:
                 score += 15
 
-            # MACD
-            if macd_line.iloc[-1] > signal_line.iloc[-1]:
-                score += 20
-
-            # Volume spike
-            if vol_z > 1.5:
-                score += 20
-
-            # =========================
-            # BOLLINGER (MANUAL SAFE)
-            # =========================
-            ma = close.rolling(20).mean()
-            std = close.rolling(20).std()
-
-            bb_upper = ma + (2 * std)
-            bb_lower = ma - (2 * std)
-
-            # Bollinger logic
-            if close.iloc[-1] < bb_lower.iloc[-1]:
+            if e50 > e200:
                 score += 10
 
-            if close.iloc[-1] > bb_upper.iloc[-1]:
+            if price > e20:
+                score += 5
+
+
+            # MOMENTUM
+            if momentum > 0:
+                score += 10
+
+            if momentum > 3:
+                score += 5
+
+
+            # RSI
+            if 40 <= rsi <= 70:
+
+                score += 15
+
+            elif 30 <= rsi < 40:
+
+                score += 10
+
+            elif rsi >= 70:
+
                 score -= 5
 
-            # =========================
-            # SIGNAL
-            # =========================
-            signal = "SAT"
 
-            ai_percent = score  # direkt AI %
+            # MACD
+            if macd > macd_signal:
+
+                score += 15
+
+            if macd > 0:
+
+                score += 5
+
+
+            # HACİM
+            if volume_ratio >= 2:
+
+                score += 15
+
+            elif volume_ratio >= 1.5:
+
+                score += 10
+
+            elif volume_ratio >= 1.2:
+
+                score += 5
+
+
+            # BOLLINGER
+            if lower <= price <= upper:
+
+                score += 5
+
+            elif price > upper:
+
+                score -= 5
+
+
+            score = max(
+                0,
+                min(100, score)
+            )
+
+
+            # =================================================
+            # SİNYAL
+            # =================================================
 
             if score >= 80:
-                signal = "🟢 STRONG BUY"
-            elif score >= 60:
-                signal = "🟡 BUY"
-            elif score >= 40:
-                signal = "🟠 WATCH"
-            else:
-                signal = "🔴 WEAK"
 
-            results.append([
-                s,
-                round(close.iloc[-1], 2),
-                int(score),
-                int(ai_percent),
-                signal
-            ])
+                signal = "🟢 STRONG BUY"
+
+            elif score >= 65:
+
+                signal = "🟢 BUY"
+
+            elif score >= 50:
+
+                signal = "🟡 WATCH"
+
+            elif score >= 35:
+
+                signal = "🟠 WEAK"
+
+            else:
+
+                signal = "🔴 SELL"
+
+
+            # =================================================
+            # STOP
+            # =================================================
+
+            stop = price * 0.95
+
+            if support < price:
+
+                stop = max(
+                    stop,
+                    support
+                )
+
+
+            # =================================================
+            # HEDEFLER
+            # =================================================
+
+            target1 = price * 1.05
+            target2 = price * 1.10
+
+            if resistance > price:
+
+                target1 = resistance
+
+
+            # =================================================
+            # SONUÇ
+            # =================================================
+
+            results.append({
+
+                "Hisse": symbol,
+
+                "Fiyat": round(
+                    price,
+                    2
+                ),
+
+                "AI %": score,
+
+                "Sinyal": signal,
+
+                "RSI": round(
+                    rsi,
+                    2
+                ),
+
+                "MACD": round(
+                    macd,
+                    4
+                ),
+
+                "MACD Signal": round(
+                    macd_signal,
+                    4
+                ),
+
+                "EMA20": round(
+                    e20,
+                    2
+                ),
+
+                "EMA50": round(
+                    e50,
+                    2
+                ),
+
+                "EMA200": round(
+                    e200,
+                    2
+                ),
+
+                "Hacim Oranı": round(
+                    volume_ratio,
+                    2
+                ),
+
+                "Momentum %": round(
+                    momentum,
+                    2
+                ),
+
+                "Destek": round(
+                    support,
+                    2
+                ),
+
+                "Direnç": round(
+                    resistance,
+                    2
+                ),
+
+                "Stop": round(
+                    stop,
+                    2
+                ),
+
+                "Hedef 1": round(
+                    target1,
+                    2
+                ),
+
+                "Hedef 2": round(
+                    target2,
+                    2
+                )
+
+            })
+
 
         except Exception as e:
-            # DEBUG (Render log)
-            print(f"{s} error:", e)
+
+            print(
+                f"ERROR {symbol}: {e}"
+            )
+
             continue
+
 
     return results
