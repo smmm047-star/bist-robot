@@ -34,9 +34,7 @@ with st.spinner("🤖 Hisseler taranıyor..."):
 results = scan_stocks(stocks)
 
 if results is None or len(results) == 0:
-st.error(
-"❌ Engine veri üretmedi. Yahoo Finance verileri alınamadı."
-)
+st.error("❌ Engine veri üretmedi. Yahoo Finance verileri alınamadı.")
 st.stop()
 
 df = pd.DataFrame(results)
@@ -68,9 +66,7 @@ filtered = df[df["AI %"] >= min_ai].copy()
 st.subheader("📋 Sinyal Tablosu")
 
 if filtered.empty:
-st.warning(
-f"AI % {min_ai} ve üzeri sinyal bulunamadı."
-)
+st.warning(f"AI % {min_ai} ve üzeri sinyal bulunamadı.")
 else:
 st.dataframe(
 filtered,
@@ -83,9 +79,7 @@ st.subheader("🔥 Güçlü AL Adayları (80+)")
 strong_buy = df[df["AI %"] >= 80].copy()
 
 if strong_buy.empty:
-st.info(
-"Şu anda AI % 80 üzeri hisse bulunmuyor."
-)
+st.info("Şu anda AI % 80 üzeri hisse bulunmuyor.")
 else:
 st.dataframe(
 strong_buy,
@@ -96,15 +90,12 @@ hide_index=True
 st.subheader("🔎 Hisse Analizi")
 
 available_stocks = [
-stock
-for stock in stocks
+stock for stock in stocks
 if stock in df["Hisse"].values
 ]
 
 if not available_stocks:
-st.warning(
-"Analiz edilebilecek hisse bulunamadı."
-)
+st.warning("Analiz edilebilecek hisse bulunamadı.")
 st.stop()
 
 selected = st.selectbox(
@@ -112,9 +103,7 @@ selected = st.selectbox(
 available_stocks
 )
 
-selected_signal = df[
-df["Hisse"] == selected
-]
+selected_signal = df[df["Hisse"] == selected]
 
 if not selected_signal.empty:
 
@@ -148,9 +137,7 @@ with col4:
     )
 ```
 
-with st.spinner(
-f"📈 {selected} grafik verisi yükleniyor..."
-):
+with st.spinner(f"📈 {selected} grafik verisi yükleniyor..."):
 
 ```
 data = yf.download(
@@ -232,20 +219,14 @@ adjust=False
 
 window = 20
 
-ma20 = close.rolling(
-window
-).mean()
+ma20 = close.rolling(window).mean()
 
-std20 = close.rolling(
-window
-).std()
+std20 = close.rolling(window).std()
 
 bb_upper = ma20 + 2 * std20
 bb_lower = ma20 - 2 * std20
 
-st.subheader(
-f"📈 {selected} Teknik Grafik"
-)
+st.subheader(f"📈 {selected} Teknik Grafik")
 
 fig = go.Figure()
 
@@ -314,22 +295,15 @@ use_container_width=True
 st.subheader("🤖 AI Sinyal Detayı")
 
 if not selected_signal.empty:
-
-```
 st.dataframe(
-    selected_signal,
-    use_container_width=True,
-    hide_index=True
+selected_signal,
+use_container_width=True,
+hide_index=True
 )
-```
-
 else:
-
-```
 st.warning(
-    "Bu hisse için sinyal verisi bulunamadı."
+"Bu hisse için sinyal verisi bulunamadı."
 )
-```
 
 if not selected_signal.empty:
 
@@ -420,4 +394,9 @@ with indicator_col3:
     st.write(
         f"**AI Skoru:** {row['AI %']:.0f}%"
     )
+```
 
+st.caption(
+"⚠️ Bu sistem teknik göstergelere dayalı "
+"otomatik analiz üretir. Yatırım tavsiyesi değildir."
+)
