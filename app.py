@@ -380,4 +380,4 @@ if data.empty:
 ```
 st.warning(
     f"{selected} için kulla
-```
+
